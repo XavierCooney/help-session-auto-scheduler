@@ -1,17 +1,19 @@
-mon 4pm  2hrs f2f    3-10
-mon 6pm  2hrs f2f    3-10
-tue 3pm  2hrs f2f    3-10
-tue 5pm  2hrs f2f    3-10
-wed 2pm  2hrs f2f    3-10
-wed 4pm  2hrs f2f    3-10
-thu 1pm  2hrs f2f    4-10  # Thursday starts at 3pm due to room clash
-thu 3pm  2hrs f2f    3-10
-fri 1pm  2hrs f2f    3-10
-fri 3pm  2hrs f2f    3-10
-mon 9am  2hrs online 3-10
-wed 6pm  2hrs online 3-10
-thu 6pm  2hrs online 3-10
-sat 10am 2hrs online 3-10
-sat 2pm  2hrs online 3-10
-sat 4pm  2hrs online 3-10
-sat 6pm  2hrs online 3-10
+mon 9am  2hrs f2f    3-10      Colombo_LG02
+mon 4pm  2hrs f2f    3-10      Elec_G03
+tue 2pm  2hrs f2f    3-5,7-10  K17_Sem_113
+wed 2pm  2hrs f2f    3-5,7-10  K17_Sem_113
+wed 4pm  2hrs f2f    3-10      Tyree_G16
+thu 12pm 2hrs f2f    3-5,7-10  K17_Sem_113
+fri 12pm 2hrs f2f    3-10      H13_Room_1040
+
+# thu 4pm  2hrs f2f    7         H13_Room_1040
+# mon 2pm  2hrs f2f    10        H13_Room_1040
+
+mon 6pm  2hrs online 3-10      Online
+tue 6pm  2hrs online 3-10      Online
+wed 9am  2hrs online 3-10      Online
+wed 6pm  2hrs online 3-10      Online
+thu 6pm  2hrs online 3-10      Online
+sat 10am 2hrs online 3-10      Online
+sat 12pm 2hrs online 3-10      Online
+sat 2pm  2hrs online 3-10      Online

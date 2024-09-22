@@ -50,6 +50,10 @@ impl<'a> Row<'a> {
             .unwrap_or_else(|| panic!("no column {column:?} in this TSV "));
         &self.tsv.rows[self.row_index][index]
     }
+
+    pub fn all_fields(&self) -> &[String] {
+        &self.tsv.rows[self.row_index]
+    }
 }
 
 impl Tsv {

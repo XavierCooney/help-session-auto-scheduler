@@ -2,7 +2,7 @@ use std::str::FromStr;
 
 use crate::{
     tsv::Tsv,
-    types::{Applicant, Availability, Course, Session, Venue},
+    types::{Applicant, Availability, Session, Venue},
 };
 
 impl FromStr for Availability {
@@ -36,26 +36,28 @@ pub fn extract_applicants_from_tsv(tsv: Tsv, sessions: &[Session]) -> Vec<Applic
         .enumerate()
         .map(|(idx, row)| {
             let email = row.get("Email");
+            let zid = email.strip_suffix("@ad.unsw.edu.au").unwrap();
             let name = row.get("Name");
             let course_raw = row.get("Which course are you primarily teaching?");
-            let course = match course_raw {
-                "COMP1511" => Course::Comp1511,
-                "COMP1521" => Course::Comp1521,
-                "COMP2521" => Course::Comp2521,
-                _ => panic!("bad course {course_raw:?}"),
-            };
+            let course = course_raw.parse().unwrap();
             let raw_hours_request =
                 row.get("Around how many hours would you like to work on help sessions, per week?");
             let max_hours_per_week = match raw_hours_request {
                 "1-5" => 5,
                 "6-10" => 10,
-                ">10" => 15,
+                ">10" => 14,
                 _ => panic!("bad max hours {raw_hours_request:?}"),
+            };
+            let raw_min_hours = row.get("Min hours");
+            let min_hours = if raw_min_hours.is_empty() {
+                None
+            } else {
+                Some(raw_min_hours.parse().unwrap())
             };
             let cant_do_weeks = row
                 .get("Are then any weeks you specifically are not available?")
                 .split(';')
-                .skip_while(|s| s.is_empty())
+                .filter(|s| !s.is_empty())
                 .map(|week| {
                     week.strip_prefix("Week ")
                         .unwrap_or_else(|| panic!("Bad week {week:?}"))
@@ -92,10 +94,12 @@ pub fn extract_applicants_from_tsv(tsv: Tsv, sessions: &[Session]) -> Vec<Applic
             Applicant {
                 id: idx as _,
                 email: email.into(),
+                zid: zid.into(),
                 name: name.into(),
                 course,
                 max_hours_per_week,
                 availabilities,
+                min_hours_per_week: min_hours,
             }
         })
         .collect()

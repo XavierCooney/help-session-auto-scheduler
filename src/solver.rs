@@ -1,8 +1,10 @@
+use core::panic;
 use std::{
     cmp::{max, min},
     collections::HashSet,
 };
 
+use rayon::iter::{IntoParallelRefIterator, ParallelIterator};
 use smallvec::SmallVec;
 
 use crate::{
@@ -14,6 +16,7 @@ const MAX_TUTORS_PER_SESSION: usize = 5;
 type ApplicantId = u16;
 type HourCount = u16;
 type Cost = u64;
+pub type Seed = u64;
 
 #[derive(Debug, Clone)]
 struct SessionAllocation {
@@ -75,15 +78,29 @@ impl<'a> Solver<'a> {
                 }
 
                 let num_tutors = allocation.assigned.len();
-                if num_tutors > 0 {
+                if num_tutors > 0 && session.min_allocation.is_none() {
                     min_size_this_week = min(min_size_this_week, num_tutors);
                     max_size_this_week = max(max_size_this_week, num_tutors);
+                }
+
+                if let Some(min_allocation) = session.min_allocation {
+                    let min_allocation = min_allocation as usize;
+                    if num_tutors < min_allocation {
+                        total_cost += 50 * ((min_allocation - num_tutors) as Cost);
+                    }
                 }
             }
 
             for (applicant_total, applicant) in applicant_weekly_total.iter().zip(self.applicants) {
                 if *applicant_total > applicant.max_hours_per_week {
                     return None;
+                }
+
+                if let Some(min_hours) = applicant.min_hours_per_week {
+                    if *applicant_total < min_hours {
+                        total_cost +=
+                            20 * (((min_hours - *applicant_total) as f32).powf(1.5) as Cost);
+                    }
                 }
             }
 
@@ -95,10 +112,15 @@ impl<'a> Solver<'a> {
                 total_cost += 200 * diff;
             }
 
-            if max_size_this_week > min_size_this_week + 1 {
+            if max_size_this_week > min_size_this_week + 2 {
                 total_cost += 50 * ((max_size_this_week - min_size_this_week) as Cost);
             }
         }
+
+        total_cost += applicant_overall_total
+            .into_iter()
+            .map(|hours| (if hours > 6 { 0 } else { (6 - hours) * 10 }) as Cost)
+            .sum::<Cost>();
 
         // TOOD: disincentive not giving many hours to tutors who requested many
 
@@ -172,6 +194,7 @@ fn solve(
     applicants: &[Applicant],
     sessions: &[Session],
     desired_hours: &[(WeekNum, HourCount)],
+    quick: bool,
 ) -> (Cost, Vec<SessionAllocation>) {
     let weeks = desired_hours
         .iter()
@@ -210,8 +233,9 @@ fn solve(
     // println!("initial cost: {old_cost}");
     let mut old_allocation = allocation.clone();
 
-    let total_steps = 40000;
-    let temp_multiplier = 5.0;
+    let total_steps = if !quick { 8000000 } else { 30000 };
+    let temp_multiplier = 1.5;
+    // let temp_multiplier = 1.0;
 
     for i in 0..total_steps {
         if let Some(_mutation) = solver.mutate_allocation(&mut allocation) {
@@ -226,9 +250,13 @@ fn solve(
                         let cost_increase = (new_cost - old_cost) as f32;
                         let temperature =
                             temp_multiplier * (total_steps as f32) / ((i as f32) + 1.0);
+                        // let temperature = 0.01
+                        //     * ((1.0 - ((i as f32) / (total_steps as f32))) * 1.5).powf(2.0)
+                        //     + 0.001;
 
                         let accept_prob = (-cost_increase / temperature).exp();
                         fastrand::f32() < accept_prob
+                        // false
                     }
                 }
                 None => false,
@@ -254,45 +282,56 @@ fn solve(
 }
 
 pub fn solve_many_times(
-    seeds: Vec<u64>,
+    seeds: Vec<Seed>,
     course: Course,
     applicants: &[Applicant],
     sessions: &[Session],
     desired_hours: &[(WeekNum, HourCount)],
-) -> Vec<SolvedSession> {
+    quick: bool,
+) -> (Vec<SolvedSession>, Seed) {
     let applicants = &applicants
         .iter()
         .filter(|applicant| applicant.course == course)
         .cloned()
         .collect::<Vec<_>>();
 
-    let (best_cost, best_seed) = seeds
-        .into_iter()
-        .map(|seed| {
-            fastrand::seed(seed);
-            let (cost, _) = solve(applicants, sessions, desired_hours);
-            println!("seed = {seed}, cost = {cost}");
-            (cost, seed)
-        })
-        .min()
-        .unwrap();
+    let best_seed = if seeds.len() > 1 {
+        seeds
+            .par_iter()
+            // .into_iter()
+            .min_by_key(|&seed| {
+                fastrand::seed(*seed);
+                let (cost, _) = solve(applicants, sessions, desired_hours, quick);
+                println!("seed = {seed}, cost = {cost}");
+                cost
+            })
+            .copied()
+            .unwrap()
+    } else if let Some(&seed) = seeds.first() {
+        seed
+    } else {
+        panic!("no seeds!")
+    };
 
     fastrand::seed(best_seed);
-    let (_, solution) = solve(applicants, sessions, desired_hours);
+    let (best_cost, solution) = solve(applicants, sessions, desired_hours, quick);
 
-    println!("best_cost = {best_cost:?}");
+    println!("best_cost = {best_cost:?} with seed {best_seed:?} (for {course:?})");
     // println!("solution = {solution:?}");
 
-    solution
-        .into_iter()
-        .enumerate()
-        .map(|(session_index, allocation)| SolvedSession {
-            session: sessions[session_index].clone(),
-            applicants: allocation
-                .assigned
-                .into_iter()
-                .map(|applicant_index| applicants[applicant_index as usize].clone())
-                .collect(),
-        })
-        .collect::<Vec<_>>()
+    (
+        solution
+            .into_iter()
+            .enumerate()
+            .map(|(session_index, allocation)| SolvedSession {
+                session: sessions[session_index].clone(),
+                applicants: allocation
+                    .assigned
+                    .into_iter()
+                    .map(|applicant_index| applicants[applicant_index as usize].clone())
+                    .collect(),
+            })
+            .collect::<Vec<_>>(),
+        best_seed,
+    )
 }
